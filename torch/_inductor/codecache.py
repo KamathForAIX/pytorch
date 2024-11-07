@@ -1762,7 +1762,14 @@ class AotCodeCompiler:
         source_code: str,
         serialized_extern_kernel_nodes: Optional[str],
         device_type: str,
-    ) -> str:
+        additional_files: List[str],
+    ) -> Union[List[str], str]:
+        """
+        Returns the .so path, or returns a list of files that were generated if
+        config.aot_inductor.package=True.
+        """
+        generated_files = additional_files
+
         if sys.platform == "win32":
             raise RuntimeError("AotCodeCompiler not yet supported for inductor")
 
@@ -1801,6 +1808,10 @@ class AotCodeCompiler:
             extra=cpp_command,
             specified_dir=specified_output_path,
         )
+
+        if config.aot_inductor.package:
+            generated_files.append(input_path)
+
         output_code_log.info("Output code written to: %s", input_path)
         trace_structured(
             "graph_dump",
@@ -1909,6 +1920,9 @@ class AotCodeCompiler:
                 with open(extern_kernel_nodes_json, "w") as f:
                     f.write(serialized_extern_kernel_nodes)
 
+                if config.aot_inductor.package:
+                    generated_files.append(extern_kernel_nodes_json)
+
             metadata = config.aot_inductor.metadata
             metadata["AOTI_DEVICE_KEY"] = device_type
 
@@ -1921,6 +1935,9 @@ class AotCodeCompiler:
 
             with open(meta_json, "w") as f:
                 f.write(json.dumps(config.aot_inductor.metadata))
+
+            if config.aot_inductor.package:
+                generated_files.append(meta_json)
 
             output_so = (
                 config.aot_inductor.output_path
@@ -2011,6 +2028,7 @@ class AotCodeCompiler:
             if config.aot_inductor.package:
                 compile_flags = os.path.splitext(input_path)[0] + "_compile_flags.json"
                 object_build_options.save_flags_to_file(compile_flags)
+                generated_files.append(compile_flags)
 
             if not use_mmap_weights:
                 aot_constants = serialized_weights
@@ -2058,6 +2076,7 @@ class AotCodeCompiler:
             if config.aot_inductor.package:
                 linker_flags = os.path.splitext(input_path)[0] + "_linker_flags.json"
                 so_build_options.save_flags_to_file(linker_flags)
+                generated_files.append(linker_flags)
 
             if config.aot_inductor.package_cpp_only:
                 # If we only want to package the cpp, then we need to save the
@@ -2071,6 +2090,11 @@ class AotCodeCompiler:
                         f_weights.write(serialized_weights)
                         f_weights.write(struct.pack("q", magic_number))
 
+                    generated_files.append(weight_file)
+
+                generated_files.append(consts_o)
+                generated_files.append(kernels_o)
+
             else:
                 if fbcode_aot_cpu_re:
                     output_so = (
@@ -2082,14 +2106,6 @@ class AotCodeCompiler:
                     os.chmod(output_so, 0o755)
                 else:
                     run_command_and_check(link_cmd)
-
-                for o_file in [
-                    output_o,
-                    consts_o,
-                    os.path.splitext(consts_o)[0] + ".S",
-                ]:
-                    # No need to package .o or .S into the output artifact
-                    os.remove(o_file)
 
                 if use_mmap_weights:
                     import resource
@@ -2104,10 +2120,14 @@ class AotCodeCompiler:
                         f_so.write(serialized_weights)
                         f_so.write(struct.pack("q", magic_number))
 
+                if config.aot_inductor.package:
+                    generated_files.append(output_so)
+
         if config.aot_inductor.package:
             # We want to return the directory that contains all the AOTI
             # generated files, not just the so
-            return os.path.split(output_so)[0]
+            # return os.path.split(output_so)[0]
+            return generated_files
 
         return output_so
 

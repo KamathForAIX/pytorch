@@ -5,7 +5,6 @@ import functools
 import io
 import itertools
 import logging
-import os
 import sys
 import time
 import warnings
@@ -649,7 +648,7 @@ def _compile_fx_inner(
         """
         with _WaitCounter("pytorch.wait_counter.actual_codegen_and_compile").guard():
             compiled_graph = fx_codegen_and_compile(gm, example_inputs, **fx_kwargs)
-            if isinstance(compiled_graph, str):
+            if isinstance(compiled_graph, str) or fx_kwargs["aot_mode"]:
                 # We only return a string in aot mode, in which case we don't
                 # need to do any post-compilation steps: we just return the string,
                 # which is the filename of the compiled code.
@@ -1221,7 +1220,7 @@ def compile_fx_aot(
     example_inputs_: List[InputType],
     inner_compile: _CompileFxCallableEx = compile_fx_inner,
     config_patches: Optional[Dict[str, str]] = None,
-) -> str:
+) -> Union[List[str], str]:
     config_patches: Dict[str, Any] = (
         {"cpp_wrapper": True}
         if config_patches is None
@@ -1236,6 +1235,20 @@ def compile_fx_aot(
             **config_patches,
             "aot_inductor.output_path": code_hash(model_.code),
         }
+    elif "aot_inductor.output_path" in config_patches:
+        assert not config_patches["aot_inductor.output_path"].endswith(".pt2"), (
+            "The output path for aot_compile should not have an extension with .pt2 "
+            "this is for specifying the output path for the .so in AOTInductor. "
+            "If you would like to package the AOTInductor generated files "
+            "into a pt2, please call `torch._inductor.aoti_compile_and_package`."
+        )
+    elif config.aot_inductor.output_path:
+        assert not config.aot_inductor.output_path.endswith(".pt2"), (
+            "The output path for aot_compile should not have an extension with .pt2 "
+            "this is for specifying the output path for the .so in AOTInductor. "
+            "If you would like to package the AOTInductor generated files "
+            "into a pt2, please call `torch._inductor.aoti_compile_and_package`."
+        )
 
     extern_node_serializer = config_patches.pop("extern_node_serializer", None)
     saved_compile_id = model_.meta.get("dynamo_compile_id", None)
@@ -1243,7 +1256,7 @@ def compile_fx_aot(
     with V.set_aot_compilation(True), torch._guards.compile_context(
         saved_compile_context
     ):
-        compiled_lib_path = compile_fx(
+        compiled_artifacts = compile_fx(
             model_,
             example_inputs_,
             inner_compile=functools.partial(
@@ -1253,11 +1266,12 @@ def compile_fx_aot(
             ),
             config_patches=config_patches,
         )
-        assert isinstance(compiled_lib_path, str)
-        assert os.path.exists(
-            compiled_lib_path
-        ), f"AOTInductor compiled library does not exist at {compiled_lib_path}"
-        return compiled_lib_path
+
+        assert isinstance(compiled_artifacts, str) or (
+            isinstance(compiled_artifacts, list)
+            and isinstance(compiled_artifacts[0], str)
+        )
+        return compiled_artifacts
 
 
 _graph_counter = count(0)
