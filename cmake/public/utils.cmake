@@ -198,8 +198,8 @@ macro(caffe2_interface_library SRC DST)
         $<TARGET_PROPERTY:${SRC},LINK_LIBRARIES>)
   elseif(${__src_target_type} STREQUAL "SHARED_LIBRARY")
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-      target_link_libraries(${DST} INTERFACE
-          "-Wl,--no-as-needed,\"$<TARGET_FILE:${SRC}>\" -Wl,--as-needed")
+      #target_link_libraries(${DST} INTERFACE
+      #    "-Wl,--no-as-needed,\"$<TARGET_FILE:${SRC}>\" -Wl,--as-needed")
     else()
       target_link_libraries(${DST} INTERFACE ${SRC})
     endif()
@@ -208,6 +208,8 @@ macro(caffe2_interface_library SRC DST)
     # property of the target.
     target_link_libraries(${DST} INTERFACE
         $<TARGET_PROPERTY:${SRC},INTERFACE_LINK_LIBRARIES>)
+  elseif(${__src_target_type} STREQUAL "OBJECT_LIBRARY")
+    target_link_libraries(${DST} INTERFACE  $<TARGET_PROPERTY:${SRC},LINK_LIBRARIES>)
   else()
     message(FATAL_ERROR
         "You made a CMake build file error: target " ${SRC}
@@ -417,8 +419,8 @@ function(torch_compile_options libname)
     # Unfortunately, hidden visibility messes up some ubsan warnings because
     # templated classes crossing library boundary get duplicated (but identical)
     # definitions. It's easier to just disable it.
-    target_compile_options(${libname} PRIVATE
-        $<$<COMPILE_LANGUAGE:CXX>: -fvisibility=hidden>)
+    #target_compile_options(${libname} PRIVATE
+    #    $<$<COMPILE_LANGUAGE:CXX>: -fvisibility=hidden>)
   endif()
 
   # Use -O2 for release builds (-O3 doesn't improve perf, and -Os results in perf regression)

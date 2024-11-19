@@ -22,7 +22,7 @@
 #define thp_bswap32(x) OSSwapInt32(x)
 #define thp_bswap64(x) OSSwapInt64(x)
 #elif defined(__GNUC__) && !defined(__MINGW32__)
-#include <byteswap.h>
+//#include <byteswap.h>
 #define thp_bswap16(x) bswap_16(x)
 #define thp_bswap32(x) bswap_32(x)
 #define thp_bswap64(x) bswap_64(x)
@@ -30,6 +30,31 @@
 #define thp_bswap16(x) _byteswap_ushort(x)
 #define thp_bswap32(x) _byteswap_ulong(x)
 #define thp_bswap64(x) _byteswap_uint64(x)
+#endif
+
+#ifdef _AIX
+#include <stdint.h>
+
+// Macro to swap endianness for 16-bit values
+#define SWAP_ENDIAN_16(val) \
+    (((val) >> 8) & 0x00FF) | (((val) << 8) & 0xFF00)
+
+// Macro to swap endianness for 32-bit values
+#define SWAP_ENDIAN_32(val) \
+    ((((val) >> 24) & 0x000000FF) | (((val) >> 8) & 0x0000FF00) | \
+     (((val) << 8) & 0x00FF0000) | (((val) << 24) & 0xFF000000))
+
+// Macro to swap endianness for 64-bit values
+#define SWAP_ENDIAN_64(val) \
+    ((((val) >> 56) & 0x00000000000000FFULL) | (((val) >> 40) & 0x000000000000FF00ULL) | \
+     (((val) >> 24) & 0x0000000000FF0000ULL) | (((val) >> 8)  & 0x00000000FF000000ULL) | \
+     (((val) << 8)  & 0x000000FF00000000ULL) | (((val) << 24) & 0x0000FF0000000000ULL) | \
+     (((val) << 40) & 0x00FF000000000000ULL) | (((val) << 56) & 0xFF00000000000000ULL))
+
+
+#define thp_bswap16(x) SWAP_ENDIAN_16(x)
+#define thp_bswap32(x) SWAP_ENDIAN_32(x)
+#define thp_bswap64(x) SWAP_ENDIAN_64(x)
 #endif
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__

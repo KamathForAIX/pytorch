@@ -309,6 +309,9 @@ endif()
 
 
 add_library(torch_python SHARED ${TORCH_PYTHON_SRCS})
+target_link_libraries(torch_python PRIVATE python3.9)
+target_link_libraries(torch_python PRIVATE torch_cpu)
+
 
 if(CAFFE2_USE_MKL AND BUILD_LIBTORCHLESS)
 

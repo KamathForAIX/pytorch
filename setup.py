@@ -231,6 +231,7 @@ import shutil
 import subprocess
 import sysconfig
 import time
+import platform
 from collections import defaultdict
 
 import setuptools.command.build_ext
@@ -1038,6 +1039,8 @@ def configure_extension_build():
             return ["-Wl,-rpath,@loader_path/" + path]
         elif IS_WINDOWS:
             return []
+        elif platform.system() == 'AIX':
+            return ["-Wl,-blibpath:/opt/freeware/lib/pthread:/opt/freeware/lib64:/opt/freeware/lib:/usr/lib:/lib/" + path]
         else:
             return ["-Wl,-rpath,$ORIGIN/" + path]
 

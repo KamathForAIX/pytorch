@@ -1,6 +1,7 @@
 #ifndef C10_MACROS_MACROS_H_
 #define C10_MACROS_MACROS_H_
 #include <cassert>
+#include <stdlib.h>
 
 /* Main entry for c10/macros.
  *
@@ -416,8 +417,7 @@ __host__ __device__
         const char* assertion,
         const char* file,
         unsigned int line,
-        const char* function) noexcept __attribute__((__noreturn__));
-
+        const char* function) noexcept { abort ();}
 #endif // __SYCL_DEVICE_ONLY__
 }
 #endif // NDEBUG

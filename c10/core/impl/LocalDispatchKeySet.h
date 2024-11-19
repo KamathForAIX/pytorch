@@ -34,11 +34,11 @@ struct C10_API PODLocalDispatchKeySet {
 
   // See Note [TLS Initialization]
   DispatchKeySet included() const {
-    return DispatchKeySet(DispatchKeySet::RAW, included_) ^
+    return DispatchKeySet(DispatchKeySet::RAWDATA, included_) ^
         c10::default_included_set;
   }
   DispatchKeySet excluded() const {
-    return DispatchKeySet(DispatchKeySet::RAW, excluded_) ^
+    return DispatchKeySet(DispatchKeySet::RAWDATA, excluded_) ^
         c10::default_excluded_set;
   }
 
@@ -65,7 +65,7 @@ struct C10_API LocalDispatchKeySet {
 #if defined(_MSC_VER) || defined(C10_ANDROID) || defined(C10_IPHONE)
 C10_API LocalDispatchKeySet tls_local_dispatch_key_set();
 #else // defined(_MSC_VER) || defined(C10_ANDROID) || defined(C10_IPHONE)
-extern C10_API thread_local PODLocalDispatchKeySet raw_local_dispatch_key_set;
+extern C10_API __thread PODLocalDispatchKeySet raw_local_dispatch_key_set;
 
 inline C10_API LocalDispatchKeySet tls_local_dispatch_key_set() {
   // Don't let people fiddle with the thread_local directly just
