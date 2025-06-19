@@ -20,10 +20,16 @@ extern "C" {
 
 #endif
 
-// Flag to just run a frame normally
-#define SKIP_CODE ((void*)0x1)
-// Flag to run a frame and any recursive calls normally
-#define SKIP_CODE_RECURSIVE ((void*)0x2)
+enum FrameAction {
+  DEFAULT, // look through the cache, compile if not found
+  SKIP, // eager
+  RUN_ONLY, // look through the cache, run eager if not found
+};
+
+typedef struct FrameExecStrategy {
+  enum FrameAction cur_action; // action to take for current frame
+  enum FrameAction recursive_action; // action to take for recursive frames
+} FrameExecStrategy;
 
 // Points to the extra scratch space on the code object
 extern Py_ssize_t extra_index;
@@ -41,15 +47,25 @@ typedef struct CacheEntry CacheEntry;
 
 #ifdef __cplusplus
 
+typedef struct VISIBILITY_HIDDEN PrecompileEntry {
+  py::object guard_manager;
+  py::object code;
+  void* root_mgr;
+
+  PrecompileEntry(py::object gm, py::object c);
+} PrecompileEntry;
+
 typedef struct VISIBILITY_HIDDEN ExtraState {
   // A pointer to the orig_code object to prevent race conditions in invalidate
   // function.
   PyCodeObject* orig_code;
+  std::list<PrecompileEntry> precompile_entries;
   // List of cache entries for compiled code objects
   std::list<CacheEntry> cache_entry_list;
   // Frame state to detect dynamic shape dims
   py::dict frame_state;
-  bool cache_limit_hit{false};
+  // Actions to apply to all frames with this code object
+  FrameExecStrategy strategy{DEFAULT, DEFAULT};
 
   ExtraState(PyCodeObject* orig_code_arg);
   CacheEntry* get_first_entry();
@@ -61,6 +77,7 @@ typedef struct VISIBILITY_HIDDEN ExtraState {
 #else
 
 typedef struct ExtraState ExtraState;
+typedef struct PrecompileEntry PrecompileEntry;
 
 #endif
 
@@ -80,17 +97,18 @@ CacheEntry* extract_cache_entry(ExtraState* extra_state);
 //  - extra_state->frame_state: Borrowed.
 FrameState* extract_frame_state(ExtraState* extra_state);
 
-// Returns if this extra_state is marked as cache limit hit.
+// Returns the FrameExecStrategy stored in extra_state.
 // Ownership contract
 // args
 //  - extra_state: Borrowed
-bool extra_state_cache_limit_hit(ExtraState* extra_state);
+FrameExecStrategy extra_state_get_exec_strategy(ExtraState* extra_state);
 
-// Mark that extra_state has hit its cache limit hit.
-// Ownership contract
-// args
-//  - extra_state: Borrowed
-void set_extra_state_cache_limit_hit(ExtraState* extra_state, bool value);
+// Set the FrameExecStrategy to be done to all frames with code object
+// corresponding to this extra_state. Ownership contract
+// - extra_state: Borrowed
+void extra_state_set_exec_strategy(
+    ExtraState* extra_state,
+    FrameExecStrategy strategy);
 
 // Ownership contract
 // args
@@ -122,8 +140,7 @@ void destroy_extra_state(void* obj);
 // return
 //  - there is no return, but the extra_state is stolen, so it becomes
 //  set_extra_state responsibility to clean it up. It will be deleted during
-//  the reset_code/skip, when the set_extra_state is called with
-//  NULL/SKIP_CODE/SKIP_CODE_RECURSIVE.
+//  the reset_code, when the set_extra_state is called with NULL.
 
 // Invariant - Dont set the extra state for the extra state that is already on
 // the code object. Otherwise, we will first free up the old extra state
@@ -180,5 +197,10 @@ PyObject* get_backend(PyObject* callback);
 // Returns the list of CacheEntry corresponding to code_obj.
 // Warning: returns references whose lifetimes are controlled by C++
 py::list _debug_get_cache_entry_list(const py::handle& code_obj);
+void _reset_precompile_entries(const py::handle& code_obj);
+void _load_precompile_entry(
+    const py::handle& code_obj,
+    py::object guard_manager,
+    py::object dynamo_code);
 
 #endif

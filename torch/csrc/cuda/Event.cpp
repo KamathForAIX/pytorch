@@ -23,19 +23,21 @@ static PyObject* THCPEvent_pynew(
   unsigned char enable_timing = 0;
   unsigned char blocking = 0;
   unsigned char interprocess = 0;
+  unsigned char external = 0;
 
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
   constexpr const char* kwlist[] = {
-      "enable_timing", "blocking", "interprocess", nullptr};
+      "enable_timing", "blocking", "interprocess", "external", nullptr};
   if (!PyArg_ParseTupleAndKeywords(
           args,
           kwargs,
-          "|bbb",
+          "|bbbb",
           // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
           const_cast<char**>(kwlist),
           &enable_timing,
           &blocking,
-          &interprocess)) {
+          &interprocess,
+          &external)) {
     return nullptr;
   }
 
@@ -47,7 +49,8 @@ static PyObject* THCPEvent_pynew(
   THCPEvent* self = (THCPEvent*)ptr.get();
   unsigned int flags = (blocking ? cudaEventBlockingSync : cudaEventDefault) |
       (enable_timing ? cudaEventDefault : cudaEventDisableTiming) |
-      (interprocess ? cudaEventInterprocess : cudaEventDefault);
+      (interprocess ? cudaEventInterprocess : cudaEventDefault) |
+      (external ? cudaEventExternal : cudaEventDefault);
 
   new (&self->cuda_event) at::cuda::CUDAEvent(flags);
 
@@ -183,6 +186,7 @@ static PyObject* THCPEvent_ipc_handle(PyObject* _self, PyObject* noargs) {
 static struct PyGetSetDef THCPEvent_properties[] = {
     {"device", (getter)THCPEvent_get_device, nullptr, nullptr, nullptr},
     {"cuda_event", (getter)THCPEvent_get_cuda_event, nullptr, nullptr, nullptr},
+    {"event_id", (getter)THCPEvent_get_cuda_event, nullptr, nullptr, nullptr},
     {nullptr}};
 
 // NOLINTNEXTLINE(*c-arrays*, *global-variables)
